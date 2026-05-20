@@ -12,7 +12,7 @@ class TravelProject(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     def __str__(self):
         return self.name
@@ -22,11 +22,13 @@ class TravelProject(models.Model):
         is_completed = places.exists() and not places.filter(is_visited=False).exists()
         if self.is_completed != is_completed:
             self.is_completed = is_completed
-            self.save(update_fields=['is_completed', 'updated_at'])
+            self.save(update_fields=["is_completed", "updated_at"])
 
 
 class ProjectPlace(models.Model):
-    project = models.ForeignKey(TravelProject, on_delete=models.CASCADE, related_name='places')
+    project = models.ForeignKey(
+        TravelProject, on_delete=models.CASCADE, related_name="places"
+    )
     external_id = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
     notes = models.TextField(blank=True, null=True)
@@ -35,8 +37,8 @@ class ProjectPlace(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['project', 'external_id']
-        ordering = ['created_at']
+        unique_together = ["project", "external_id"]
+        ordering = ["created_at"]
 
     def __str__(self):
         return f"{self.name} ({self.project.name})"
