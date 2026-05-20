@@ -1,7 +1,10 @@
-from rest_framework import status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
+from .filters import ProjectPlaceFilterSet, TravelProjectFilterSet
 from .models import ProjectPlace, TravelProject
 from .serializers import (
     ProjectPlaceAddSerializer,
@@ -15,7 +18,12 @@ from .serializers import (
 
 class TravelProjectViewSet(viewsets.ModelViewSet):
     queryset = TravelProject.objects.prefetch_related('places').all()
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'patch', 'delete']
+    filterset_class = TravelProjectFilterSet
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'start_date', 'created_at']
+    ordering = ['-created_at']
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -42,35 +50,43 @@ class TravelProjectViewSet(viewsets.ModelViewSet):
         return Response(TravelProjectSerializer(project, context={'request': request}).data)
 
 
-class ProjectPlaceViewSet(viewsets.ViewSet):
+class ProjectPlaceViewSet(viewsets.GenericViewSet):
+    serializer_class = ProjectPlaceSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_class = ProjectPlaceFilterSet
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    ordering_fields = ['created_at', 'is_visited']
+    ordering = ['created_at']
 
-    def _get_project(self, project_pk):
-        return get_object_or_404(TravelProject, pk=project_pk)
+    def get_queryset(self):
+        get_object_or_404(TravelProject, pk=self.kwargs['project_pk'])
+        return ProjectPlace.objects.filter(project_id=self.kwargs['project_pk'])
 
     def list(self, request, project_pk=None):
-        project = self._get_project(project_pk)
-        serializer = ProjectPlaceSerializer(project.places.all(), many=True)
-        return Response(serializer.data)
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(self.get_serializer(queryset, many=True).data)
 
     def retrieve(self, request, project_pk=None, pk=None):
-        project = self._get_project(project_pk)
-        place = get_object_or_404(ProjectPlace, pk=pk, project=project)
-        return Response(ProjectPlaceSerializer(place).data)
+        place = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response(self.get_serializer(place).data)
 
     def create(self, request, project_pk=None):
-        project = self._get_project(project_pk)
+        project = get_object_or_404(TravelProject, pk=project_pk)
         serializer = ProjectPlaceAddSerializer(
             data=request.data,
             context={'project': project},
         )
         serializer.is_valid(raise_exception=True)
         place = serializer.save()
-        return Response(ProjectPlaceSerializer(place).data, status=status.HTTP_201_CREATED)
+        return Response(self.get_serializer(place).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, project_pk=None, pk=None):
-        project = self._get_project(project_pk)
-        place = get_object_or_404(ProjectPlace, pk=pk, project=project)
+        place = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ProjectPlaceUpdateSerializer(place, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(ProjectPlaceSerializer(place).data)
+        return Response(self.get_serializer(place).data)
