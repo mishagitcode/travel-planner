@@ -59,6 +59,8 @@ class ProjectPlaceViewSet(viewsets.GenericViewSet):
     ordering = ['created_at']
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ProjectPlace.objects.none()
         get_object_or_404(TravelProject, pk=self.kwargs['project_pk'])
         return ProjectPlace.objects.filter(project_id=self.kwargs['project_pk'])
 
